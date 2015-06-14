@@ -1,12 +1,21 @@
 		 __constant sampler_t sampler =	CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE| CLK_FILTER_NEAREST;
 
  	 	 __kernel void find_edges(__read_only image2d_t input, __write_only image2d_t output){
-                    __local float lapac_matrix[9*9];
-                    float sigma = 0.7;
+                    __local int lapac_matrix[9*9];
+                    float sigma = 1.4;
                     size_t x =  get_global_id(0);
                     size_t y =  get_global_id(1);
-                    float help = (pow((float)x,2)+pow((float)y,2))/(2*pow(sigma,2));
+                    int help = (pow((float)x,2)+pow((float)y,2))/(2*pow(sigma,2));
                     lapac_matrix[x + y*9] = -(1/(M_PI*pow(sigma,4)))*(1-help)*pow(M_E,-help);
                     barrier(CLK_GLOBAL_MEM_FENCE);
+                    int2 coords = {x,y};
+					uint4 inputPixel = read_imageui( input, sampler, coords );
+                    for(int y = 0;y<9;y++){
+                    	for(int x = 0;x<9;x++){
+                    		inputPixel += (lapac_matrix[x+y*9] * read_imageui( input, sampler, coords + (int2)(x,y) ));
+                    	}
+                    }
+                    if(coords.x<512 && coords.y<512)
+                    write_imageui( output, coords, inputPixel);
                     
  	 	 }

@@ -1,3 +1,4 @@
+#define CL_USE_DEPRECATED_OPENCL_1_1_APIS
 #include <iostream>
 #include <CL/cl.hpp>
 #include "opencl-helper.hpp"
@@ -25,7 +26,7 @@ int main(int argc, char* argv[]) {
 	loadImage("eingabe.bmp", &t);
 
 	cl::ImageFormat format;
-	format.image_channel_data_type = CL_UNSIGNED_INT8;
+	format.image_channel_data_type = CL_FLOAT;
 	format.image_channel_order = CL_RGBA;
 	cl_int er;
 	cl::Image2D image { cl::Image2D(context,
