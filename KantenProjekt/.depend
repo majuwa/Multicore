@@ -1,1 +1,4 @@
-main.o: main.cpp
+stb_image.o: stb_image.cpp
+images.o: images.cpp images.h stb_image.cpp stb_image_write.h
+main.o: main.cpp opencl-helper.hpp images.h stb_image.cpp \
+ stb_image_write.h

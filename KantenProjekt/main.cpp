@@ -1,49 +1,83 @@
 #include <iostream>
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
+#include <CL/cl.hpp>
+#include "opencl-helper.hpp"
+#include "images.h"
 #include <random>
-#include <boost/compute/system.hpp>
-#include <boost/compute/interop/opencv/core.hpp>
-#include <boost/compute/interop/opencv/highgui.hpp>
-#include <boost/compute/utility/source.hpp>
-using namespace boost::compute;
- char opencl_kernel_code[] = BOOST_COMPUTE_STRINGIZE_SOURCE (
-		 __constant sampler_t sampler =	CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE| CLK_FILTER_NEAREST;
 
- 	 	 __kernel convert(__read_only image2d_t input, __write_only image2d_t output){
+#include <string>
 
- 	 	 }
-		 );
 int main(int argc, char* argv[]) {
 	std::cout << "Kanten Projekt" << std::endl;
-	cv::Mat cv_image = cv::imread(argv[1], CV_LOAD_IMAGE_COLOR);
+	//cv::Mat cv_image = cv::imread("test.jpg", CV_LOAD_IMAGE_COLOR);
 
-	device gpu = boost::compute::system::default_device();
-	context context(gpu);
-	command_queue queue(context, gpu);
+	auto default_device = initialize_gpu();
+	auto list { default_device };
+	cl::Context context(list);
 
-	cv::cvtColor(cv_image, cv_image, CV_BGR2BGRA);
+	cl::Program::Sources sources;
+	std::string kernel_code = get_file_contents("kernel.txt");
+	sources.push_back( { kernel_code.c_str(), kernel_code.length() });
 
-	image2d input_image = opencv_create_image2d_with_mat(cv_image,
-			image2d::read_only, queue);
-	image2d output_image(context, input_image.width(), input_image.height(),
-			input_image.format(), image2d::write_only);
-	auto program_code = program::create_with_source(opencl_kernel_code,context);
-	try{
-		program_code.build();
-	}
-	catch(boost::compute::opencl_error e){
-		std::cout << "Programm error" << program_code.build_log();
-	}
-	kernel lap_gau {program_code,"convert"};
-	lap_gau.set_arg(0,input_image);
-	lap_gau.set_arg(1,output_image);
+	cl::Program program(context, sources);
 
-    size_t origin[2] = { input_image.width(), input_image.height() };
-	queue.enqueue_nd_range_kernel(lap_gau, 0,origin,nullptr, nullptr);
+	build_kernel(kernel_code, default_device, program);
+	image_t t;
+	loadImage("eingabe.bmp", &t);
 
-	opencv_imshow("test",output_image,queue);
+	cl::ImageFormat format;
+	format.image_channel_data_type = CL_UNSIGNED_INT8;
+	format.image_channel_order = CL_RGBA;
+	cl_int er;
+	cl::Image2D image { cl::Image2D(context,
+	CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, format, t.width, t.height, 0,
+			t.pixels, &er) };
+	if (er == CL_SUCCESS)
+		std::cout << "Success loading image" << std::endl;
+	cl::Image2D image_2 { cl::Image2D(context, CL_MEM_WRITE_ONLY, format,
+			t.width, t.height, 0, nullptr, &er) };
+	if (er == CL_SUCCESS)
+		std::cout << "Success loading result image" << std::endl;
+	cl::CommandQueue queue(context, default_device);
+	cl::Kernel kernel_add = cl::Kernel(program, "find_edges", &er);
+	if (er == CL_SUCCESS)
+		std::cout << "kernel successfull loaded" << std::endl;
+	er = kernel_add.setArg(0, image);
+	if (er == CL_SUCCESS)
+		std::cout << "created param 1" << std::endl;
+	er = kernel_add.setArg(1, image_2);
+	if (er == CL_SUCCESS)
+		std::cout << "created param 2" << std::endl;
+
+	er = queue.enqueueNDRangeKernel(kernel_add, cl::NullRange,
+			cl::NDRange(t.width, t.height), cl::NullRange);
+	if (er == CL_SUCCESS)
+		std::cout << "created kernel enviremont successfully" << std::endl;
+	queue.finish();
+	if (er == CL_SUCCESS)
+		std::cout << "executed successfully" << std::endl;
+	unsigned char* test_array = new unsigned char[t.height * t.width * t.bpp];
+	cl::size_t<int(3)> origin;
+	origin[0] = 0;
+	origin[1] = 0;
+	origin[2] = 0;
+	cl::size_t<int(3)> region;
+	region[0] = t.width;
+	region[1] = t.height;
+	region[2] = 1;
+	er = queue.enqueueReadImage(image_2, CL_TRUE, origin, region,
+			sizeof(unsigned char) * t.width * t.bpp, 0, (void*) test_array,
+			nullptr, nullptr);
+	if (er == CL_SUCCESS)
+		std::cout << "copying in output image" << std::endl;
+	image_t i2;
+	i2.height = t.height;
+	i2.width = t.width;
+	i2.bpp = t.bpp;
+	i2.pixels = test_array;
+	saveImage("test2.bmp", i2);
+	delete t.pixels;
+	delete test_array;
+	//opencv_imshow("test",output_image,queue);
 
 	std::cout << "test" << std::endl;
 	return 0;

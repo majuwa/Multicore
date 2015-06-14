@@ -1,7 +1,7 @@
 CC=gcc
 CXX=g++
 RM=rm -f
-CPPFLAGS=-g -fpermissive `pkg-config --cflags opencv` -std=c++11  -I compute/include
+CPPFLAGS=-g -fpermissive `pkg-config --cflags opencv` -std=c++11
 LDFLAGS=-g 
 LDLIBS=-lOpenCL -lboost_timer -lboost_system -lboost_thread `pkg-config --libs opencv`
 
